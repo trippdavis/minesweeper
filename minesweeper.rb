@@ -1,19 +1,17 @@
 require 'byebug'
 require 'yaml'
 
+MOVES = [[-1, 0], [-1, 1], [0, 1], [1, 1], [1, 0], [1, -1], [0, -1], [-1, -1]]
 
-MOVES = [[-1, 0],[-1, 1],[0, 1], [1, 1], [1,0], [1,-1], [0,-1],[-1,-1]]
 class Minesweeper
   attr_reader :board
 
   def initialize
     @board = Board.new
+    nil
   end
 
   def play
-    #player picks
-    #game checks spot
-    #decide if winner
     until won?
       board.display
       pick = get_move
@@ -29,15 +27,13 @@ class Minesweeper
       when picked_tile.flagged?
         next
       when pick[0] == "f"
-        picked_tile.state = "F"
+        picked_tile.flag = true
         next
-      when picked_tile.type == "B" && picked_tile.state == "*"
+      when picked_tile.type == "B" && !picked_tile.revealed
         puts 'You lose!'
         return
-      when picked_tile.bomb_count > 0
+      when picked_tile.bomb_count >= 0
         picked_tile.reveal
-      when picked_tile.bomb_count == 0
-        reveal_bomb_count(picked_tile)
       end
 
 
@@ -49,32 +45,11 @@ class Minesweeper
   def won?
     board.board.each do |row|
       row.each do |space|
-          return false if space.type == "S" && space.state == "*"
+        return false if space.type == "S" && !space.revealed?
       end
     end
 
     true
-  end
-
-  def reveal_bomb_count(picked_tile)
-
-    neighbors = [picked_tile]
-    until neighbors.empty?
-      # new_neighbors = []
-      this_tile = neighbors.shift
-      next unless this_tile.state == "*"
-      this_tile.reveal
-      MOVES.each do |move|
-        move_x = this_tile.pos[0] + move[0]
-        move_y = this_tile.pos[1] + move[1]
-        unless @board.out_of_bounds?([move_x, move_y])
-          neighbor_tile = @board.board[move_x][move_y]
-          if this_tile.bomb_count == 0
-            neighbors << neighbor_tile
-          end
-        end
-      end
-    end
   end
 
   def get_move
@@ -98,7 +73,6 @@ class Minesweeper
     game = YAML::load_file('minesweeper.yml')
     game.play
   end
-
 end
 
 class Board
@@ -107,6 +81,7 @@ class Board
   def initialize
     @board = Array.new(9) { Array.new(9) }
     populate_board
+    nil
   end
 
   def populate_board
@@ -115,11 +90,6 @@ class Board
     @board.each_with_index do |row, row_i|
       row.each_with_index do |col, col_i|
         @board[row_i][col_i] = Tile.new(tiles.pop, @board, [row_i, col_i])
-      end
-    end
-    @board.each_with_index do |row, row_i|
-      row.each_with_index do |col, col_i|
-        @board[row_i][col_i].populate_bombs
       end
     end
 
@@ -131,66 +101,78 @@ class Board
   end
 
   def display
-    @board.each do |row|
-      row_display = []
+    p "[ ][0][1][2][3][4][5][6][7][8]"
+    @board.each_with_index do |row, row_i|
+      row_display = ""
       row.each do |space|
-
-        row_display << space.type
+        case
+        when space.revealed? && space.bomb_count == 0
+          row_display << "[_]"
+        when space.revealed? && space.bomb_count > 0
+          row_display << "[#{space.bomb_count}]"
+        when space.flagged?
+          row_display << "[F]"
+        else
+          row_display << "[*]"
+        end
       end
-      p row_display
-    end
-    p ""
-    @board.each do |row|
-      row_display = []
-      row.each do |space|
-
-        row_display << space.state.to_s
-      end
-      p row_display
+      p "[#{row_i}]" + row_display
     end
 
-    return nil
+    nil
   end
 
 end
 
 class Tile
-  attr_accessor :state, :type
-  attr_reader :board, :pos, :bomb_count
+  attr_accessor :state, :type, :revealed, :flag
+  attr_reader :board, :pos
 
   def initialize(type, board, pos)
     @pos = pos
-    @state = "*" #revelead or unrevealed
-    @type = type #bomb,flag,etc
+    @revealed = false
+    @flag = false
+    @type = type
     @board = board
-    @bomb_count = 0
   end
 
-  def populate_bombs
-
+  def bomb_count
+    bomb_count = 0
     MOVES.each do |move|
       if (pos[0] + move[0]) >= 0 && (pos[0] + move[0]) < 9 &&
-         (pos[1] + move[1]) >= 0 && (pos[1] + move[1]) < 9
+        (pos[1] + move[1]) >= 0 && (pos[1] + move[1]) < 9
 
-         @bomb_count += 1 if board[pos[0] + move[0]][pos[1] + move[1]].type == "B"
-       end
+        bomb_count += 1 if board[pos[0] + move[0]][pos[1] + move[1]].type == "B"
+      end
     end
+    bomb_count
+  end
+
+  def neighbors
+    MOVES.map do |move|
+      if (pos[0] + move[0]) >= 0 && (pos[0] + move[0]) < 9 &&
+        (pos[1] + move[1]) >= 0 && (pos[1] + move[1]) < 9
+
+        board[pos[0] + move[0]][pos[1] + move[1]]
+      end
+    end.compact
   end
 
   def reveal
-    if @bomb_count > 0
-      @state = @bomb_count
-    else
-      @state = "_"
+    return if revealed
+    self.revealed = true
+    if bomb_count == 0
+      neighbors.each do |neighbor|
+        neighbor.reveal
+      end
     end
   end
+  def revealed?
+    revealed
+  end
+
 
   def flagged?
-    @state == "F"
+    @flag
   end
 end
-
-# board = Board.new
-# board.populate_board
-# board.display
-# board.play
