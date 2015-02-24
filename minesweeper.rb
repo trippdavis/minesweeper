@@ -30,6 +30,8 @@ class Minesweeper
         picked_tile.flag = true
         next
       when picked_tile.type == "B" && !picked_tile.revealed
+        picked_tile.reveal
+        board.display
         puts 'You lose!'
         return
       when picked_tile.bomb_count >= 0
@@ -39,6 +41,8 @@ class Minesweeper
 
     end
 
+
+    board.display
     puts "You won!"
   end
 
@@ -106,6 +110,8 @@ class Board
       row_display = ""
       row.each do |space|
         case
+        when space.revealed? && space.type == "B"
+          row_display << "[B]"
         when space.revealed? && space.bomb_count == 0
           row_display << "[_]"
         when space.revealed? && space.bomb_count > 0
